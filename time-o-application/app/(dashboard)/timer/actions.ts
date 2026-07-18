@@ -28,6 +28,19 @@ export async function startTimer(taskId: string): Promise<StartTimerResult> {
   }
 
   try {
+    // One active session at a time: refuse to start while another timer is
+    // still in progress or paused.
+    const active = await prisma.timeTracker.findFirst({
+      where: { userId, status: { in: ["IN_PROGRESS", "PAUSED"] } },
+      select: { id: true },
+    });
+    if (active) {
+      return {
+        status: "error",
+        message: "Another timer is already active. Stop it before starting a new one.",
+      };
+    }
+
     // Only allow starting a timer against one of the user's own tasks.
     const task = await prisma.task.findFirst({
       where: { id: taskId, userId },
@@ -47,8 +60,10 @@ export async function startTimer(taskId: string): Promise<StartTimerResult> {
       select: { id: true },
     });
 
-    // The dashboard lists sessions, so keep it fresh after every transition.
+    // The dashboard lists sessions and the timer page restores the active
+    // one, so keep both fresh after every transition.
     revalidatePath("/dashboard");
+    revalidatePath("/timer");
     return { status: "success", trackerId: tracker.id };
   } catch (error) {
     console.error("Failed to start timer:", error);
@@ -73,6 +88,7 @@ export async function pauseTimer(
       return { status: "error", message: "That timer is not running." };
     }
     revalidatePath("/dashboard");
+    revalidatePath("/timer");
     return { status: "success" };
   } catch (error) {
     console.error("Failed to pause timer:", error);
@@ -92,6 +108,7 @@ export async function resumeTimer(trackerId: string): Promise<TimerActionResult>
       return { status: "error", message: "That timer is not paused." };
     }
     revalidatePath("/dashboard");
+    revalidatePath("/timer");
     return { status: "success" };
   } catch (error) {
     console.error("Failed to resume timer:", error);
@@ -122,6 +139,7 @@ export async function stopTimer(
       return { status: "error", message: "That timer is already finished." };
     }
     revalidatePath("/dashboard");
+    revalidatePath("/timer");
     return { status: "success" };
   } catch (error) {
     console.error("Failed to stop timer:", error);

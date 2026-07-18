@@ -23,6 +23,16 @@ type TimerTask = {
 
 type TimerStatus = "idle" | "running" | "paused";
 
+export type ActiveSession = {
+  trackerId: string;
+  taskId: string;
+  status: "running" | "paused";
+  /** Seconds banked before the current running segment. */
+  bankedSeconds: number;
+  /** Epoch ms when the current running segment began; null while paused. */
+  runningSince: number | null;
+};
+
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
@@ -33,29 +43,52 @@ function formatElapsed(ms: number): string {
     .join(":");
 }
 
-export function Timer({ tasks }: { tasks: TimerTask[] }) {
-  const [taskId, setTaskId] = useState<string | null>(null);
-  const [status, setStatus] = useState<TimerStatus>("idle");
-  const [trackerId, setTrackerId] = useState<string | null>(null);
-  const [elapsedMs, setElapsedMs] = useState(0);
+export function Timer({
+  tasks,
+  initialSession,
+}: {
+  tasks: TimerTask[];
+  initialSession: ActiveSession | null;
+}) {
+  const [taskId, setTaskId] = useState<string | null>(
+    initialSession?.taskId ?? null,
+  );
+  const [status, setStatus] = useState<TimerStatus>(
+    initialSession?.status ?? "idle",
+  );
+  const [trackerId, setTrackerId] = useState<string | null>(
+    initialSession?.trackerId ?? null,
+  );
+  // Seeded with the banked time only (no Date.now() term) so server and
+  // client render the same markup; the tick effect below catches the display
+  // up right after hydration.
+  const [elapsedMs, setElapsedMs] = useState(
+    (initialSession?.bankedSeconds ?? 0) * 1000,
+  );
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<
     { kind: "error" | "notice"; text: string } | null
   >(null);
 
   // Milliseconds banked from run segments before the last pause.
-  const bankedMsRef = useRef(0);
+  const bankedMsRef = useRef((initialSession?.bankedSeconds ?? 0) * 1000);
   // Timestamp of the last start/resume; null while idle or paused.
-  const runningSinceRef = useRef<number | null>(null);
+  const runningSinceRef = useRef<number | null>(
+    initialSession?.runningSince ?? null,
+  );
 
   useEffect(() => {
     if (status !== "running") return;
-    const id = setInterval(() => {
+    const update = () => {
       const since = runningSinceRef.current;
       if (since !== null) {
         setElapsedMs(bankedMsRef.current + Date.now() - since);
       }
-    }, 250);
+    };
+    // Update immediately so a restored running session shows its real
+    // elapsed time without waiting for the first tick.
+    update();
+    const id = setInterval(update, 250);
     return () => clearInterval(id);
   }, [status]);
 

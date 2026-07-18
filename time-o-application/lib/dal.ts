@@ -45,6 +45,33 @@ export const getUser = cache(async () => {
 });
 
 /**
+ * Returns the user's active (in progress or paused) session, or null.
+ */
+export const getActiveTimeTracker = cache(async () => {
+  const session = await verifySession();
+
+  try {
+    return await prisma.timeTracker.findFirst({
+      where: {
+        userId: session.userId,
+        status: { in: ["IN_PROGRESS", "PAUSED"] },
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        taskId: true,
+        status: true,
+        minutesSpent: true,
+        updatedAt: true,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to fetch active time tracker:", error);
+    return null;
+  }
+});
+
+/**
  * Returns the current user's time tracking sessions, newest first.
  */
 export const getTimeTrackers = cache(async () => {
