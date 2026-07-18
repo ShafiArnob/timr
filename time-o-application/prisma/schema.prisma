@@ -20,7 +20,8 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tasks Task[]
+  tasks        Task[]
+  timeTrackers TimeTracker[]
 
   @@map("users")
 }
@@ -35,6 +36,33 @@ model Task {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  timeTrackers TimeTracker[]
+
   @@index([userId])
   @@map("tasks")
+}
+
+enum TimeTrackerStatus {
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+}
+
+model TimeTracker {
+  id           String            @id @default(cuid())
+  userId       String
+  taskId       String
+  startTime    DateTime?
+  endTime      DateTime?
+  minutesSpent Int               @default(0)
+  status       TimeTrackerStatus @default(IN_PROGRESS)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([taskId])
+  @@map("time_trackers")
 }
