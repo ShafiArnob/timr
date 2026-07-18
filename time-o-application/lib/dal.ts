@@ -30,7 +30,13 @@ export const getUser = cache(async () => {
   try {
     return await prisma.user.findUnique({
       where: { id: session.userId },
-      select: { id: true, name: true, email: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        country: true,
+        timezone: true,
+      },
     });
   } catch (error) {
     console.error("Failed to fetch user:", error);
