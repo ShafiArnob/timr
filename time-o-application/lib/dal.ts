@@ -43,3 +43,21 @@ export const getUser = cache(async () => {
     return null;
   }
 });
+
+/**
+ * Returns the current user's tasks, newest first.
+ */
+export const getTasks = cache(async () => {
+  const session = await verifySession();
+
+  try {
+    return await prisma.task.findMany({
+      where: { userId: session.userId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, value: true, label: true, color: true },
+    });
+  } catch (error) {
+    console.error("Failed to fetch tasks:", error);
+    return [];
+  }
+});
