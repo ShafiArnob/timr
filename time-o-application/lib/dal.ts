@@ -45,6 +45,31 @@ export const getUser = cache(async () => {
 });
 
 /**
+ * Returns the current user's time tracking sessions, newest first.
+ */
+export const getTimeTrackers = cache(async () => {
+  const session = await verifySession();
+
+  try {
+    return await prisma.timeTracker.findMany({
+      where: { userId: session.userId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        status: true,
+        startTime: true,
+        endTime: true,
+        minutesSpent: true,
+        task: { select: { label: true, color: true } },
+      },
+    });
+  } catch (error) {
+    console.error("Failed to fetch time trackers:", error);
+    return [];
+  }
+});
+
+/**
  * Returns the current user's tasks, newest first.
  */
 export const getTasks = cache(async () => {
