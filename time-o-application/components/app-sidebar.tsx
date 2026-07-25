@@ -5,6 +5,7 @@ import * as React from "react";
 import { NavMain } from "@/components/nav-main";
 import { NavSecondary } from "@/components/nav-secondary";
 import { NavUser } from "@/components/nav-user";
+import { type QuickCreateTask } from "@/components/quick-create-dialog";
 import {
   Sidebar,
   SidebarContent,
@@ -38,6 +39,8 @@ type SidebarData = {
     url: string;
     icon: React.ReactNode;
   }>;
+  /** Feeds the Quick Create dialog's task picker. */
+  tasks?: QuickCreateTask[];
 };
 
 const defaultData: SidebarData = {
@@ -69,6 +72,7 @@ const defaultData: SidebarData = {
     },
   ],
   navSecondary: [],
+  tasks: [],
 };
 
 export function AppSidebar({
@@ -100,7 +104,10 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={resolvedData.navMain ?? []} />
+        <NavMain
+          items={resolvedData.navMain ?? []}
+          tasks={resolvedData.tasks ?? []}
+        />
         <NavSecondary
           items={resolvedData.navSecondary ?? []}
           className="mt-auto"

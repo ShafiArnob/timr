@@ -2,7 +2,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
-import { getUser } from "@/lib/dal";
+import { getTasks, getUser } from "@/lib/dal";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -15,7 +15,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getUser();
+  const [user, tasks] = await Promise.all([getUser(), getTasks()]);
 
   const sidebarData = {
     user: {
@@ -23,6 +23,13 @@ export default async function DashboardLayout({
       email: user?.email ?? "guest@example.com",
       avatar: "/avatars/shadcn.jpg",
     },
+    // Quick Create logs against a task, so the picker needs the same list —
+    // in the same manual order — that the rest of the app uses.
+    tasks: tasks.map((task) => ({
+      id: task.id,
+      label: task.label,
+      color: task.color,
+    })),
   };
 
   return (
