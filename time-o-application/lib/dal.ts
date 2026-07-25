@@ -97,6 +97,42 @@ export const getTimeTrackers = cache(async () => {
 });
 
 /**
+ * Returns the current user's API keys, newest first.
+ * `hashedKey` is deliberately never selected — nothing outside verification
+ * needs it, and keeping it out of the page payload keeps it off the wire.
+ */
+export const getApiKeys = cache(async () => {
+  const session = await verifySession();
+
+  try {
+    const keys = await prisma.apiKey.findMany({
+      where: { userId: session.userId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        prefix: true,
+        expiresAt: true,
+        revokedAt: true,
+        lastUsedAt: true,
+        createdAt: true,
+      },
+    });
+
+    // Resolved here rather than while rendering: the page would otherwise
+    // read the clock mid-render, and the client would read its own.
+    const now = Date.now();
+    return keys.map((key) => ({
+      ...key,
+      expired: key.expiresAt !== null && key.expiresAt.getTime() <= now,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch API keys:", error);
+    return [];
+  }
+});
+
+/**
  * Returns the current user's tasks in their manual order.
  * `createdAt` only breaks ties between equal positions.
  */

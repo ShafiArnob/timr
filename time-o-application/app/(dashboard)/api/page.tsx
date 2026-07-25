@@ -5,20 +5,36 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getApiKeys, getUser } from "@/lib/dal";
+import { ApiKeys, type ApiKeyRow } from "./api-keys";
 
-export default function Page() {
+export default async function Page() {
+  const [user, keys] = await Promise.all([getUser(), getApiKeys()]);
+
+  // Dates are serialized to ISO strings so the client component receives
+  // plain, deterministic values.
+  const rows: ApiKeyRow[] = keys.map((key) => ({
+    id: key.id,
+    name: key.name,
+    prefix: key.prefix,
+    createdAt: key.createdAt.toISOString(),
+    lastUsedAt: key.lastUsedAt?.toISOString() ?? null,
+    expiresAt: key.expiresAt?.toISOString() ?? null,
+    expired: key.expired,
+  }));
+
   return (
     <div className="px-4 lg:px-6">
       <Card>
         <CardHeader>
-          <CardTitle>API</CardTitle>
+          <CardTitle>API keys</CardTitle>
           <CardDescription>
-            Manage your API keys, endpoints, and integration settings.
+            Create a key to reach your time data from outside the app. Keys are
+            shown once at creation — we only store a hash.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>Your API dashboard is ready for configuration and monitoring.</p>
-          <p>Use this space to connect services and manage request access.</p>
+        <CardContent>
+          <ApiKeys keys={rows} timezone={user?.timezone ?? null} />
         </CardContent>
       </Card>
     </div>
