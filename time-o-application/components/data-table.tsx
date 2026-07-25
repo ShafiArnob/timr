@@ -19,6 +19,10 @@ import { z } from "zod"
 
 import { deleteTimeTracker } from "@/app/(dashboard)/dashboard/actions"
 import {
+  EditSessionDialog,
+  type EditSessionTask,
+} from "@/components/edit-session-dialog"
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -69,6 +73,7 @@ import {
 
 export const schema = z.object({
   id: z.string(),
+  taskId: z.string(),
   task: z.string(),
   taskColor: z.string(),
   status: z.enum(["IN_PROGRESS", "PAUSED", "COMPLETED"]),
@@ -193,9 +198,12 @@ function StatusBadge({ status }: { status: TimeTrackerRow["status"] }) {
 
 export function DataTable({
   data,
+  tasks,
   timezone,
 }: {
   data: TimeTrackerRow[]
+  /** The picker the edit dialog offers, in the user's manual task order. */
+  tasks: EditSessionTask[]
   timezone: string | null
 }) {
   const [columnVisibility, setColumnVisibility] =
@@ -256,7 +264,8 @@ export function DataTable({
         id: "actions",
         header: () => <span className="sr-only">Actions</span>,
         cell: ({ row }) => (
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-1">
+            <EditSessionDialog session={row.original} tasks={tasks} />
             <DeleteSessionButton session={row.original} />
           </div>
         ),
@@ -264,7 +273,7 @@ export function DataTable({
         enableHiding: false,
       },
     ],
-    [timezone]
+    [tasks, timezone]
   )
   const table = useReactTable({
     data,

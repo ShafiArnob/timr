@@ -1,14 +1,19 @@
 import { ChartTaskTime, type TaskTimePoint } from "@/components/chart-task-time";
 import { DataTable, type TimeTrackerRow } from "@/components/data-table";
-import { getTimeTrackers, getUser } from "@/lib/dal";
+import { getTasks, getTimeTrackers, getUser } from "@/lib/dal";
 
 export default async function Page() {
-  const [user, trackers] = await Promise.all([getUser(), getTimeTrackers()]);
+  const [user, trackers, tasks] = await Promise.all([
+    getUser(),
+    getTimeTrackers(),
+    getTasks(),
+  ]);
 
   // Dates are serialized to ISO strings so the client component receives
   // plain, deterministic values.
   const rows: TimeTrackerRow[] = trackers.map((tracker) => ({
     id: tracker.id,
+    taskId: tracker.task.id,
     task: tracker.task.label,
     taskColor: tracker.task.color,
     status: tracker.status,
@@ -34,7 +39,15 @@ export default async function Page() {
       <div className="px-4 lg:px-6">
         <ChartTaskTime data={chartPoints} />
       </div>
-      <DataTable data={rows} timezone={user?.timezone ?? null} />
+      <DataTable
+        data={rows}
+        tasks={tasks.map((task) => ({
+          id: task.id,
+          label: task.label,
+          color: task.color,
+        }))}
+        timezone={user?.timezone ?? null}
+      />
     </>
   );
 }
