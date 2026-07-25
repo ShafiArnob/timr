@@ -2,7 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CircleIcon, PauseIcon, PlayIcon, SquareIcon } from "lucide-react";
+import {
+  CircleIcon,
+  MaximizeIcon,
+  MinimizeIcon,
+  PauseIcon,
+  PlayIcon,
+  SquareIcon,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { pauseTimer, resumeTimer, startTimer, stopTimer } from "./actions";
@@ -66,6 +73,37 @@ function readStoredPreset(trackerId: string): number | null {
   }
 }
 
+/**
+ * Safari didn't ship the unprefixed element fullscreen API until 16.4, and the
+ * prefixed calls return void rather than a promise.
+ */
+type WebkitFullscreen = {
+  webkitRequestFullscreen?: () => void;
+  webkitExitFullscreen?: () => void;
+  webkitFullscreenElement?: Element | null;
+};
+
+function fullscreenElement(): Element | null {
+  return (
+    document.fullscreenElement ??
+    (document as Document & WebkitFullscreen).webkitFullscreenElement ??
+    null
+  );
+}
+
+async function requestFullscreen(element: HTMLElement): Promise<void> {
+  const prefixed = element as HTMLElement & WebkitFullscreen;
+  if (element.requestFullscreen) return element.requestFullscreen();
+  if (prefixed.webkitRequestFullscreen) return prefixed.webkitRequestFullscreen();
+  throw new Error("Fullscreen is not supported");
+}
+
+async function exitFullscreen(): Promise<void> {
+  const prefixed = document as Document & WebkitFullscreen;
+  if (document.exitFullscreen) return document.exitFullscreen();
+  prefixed.webkitExitFullscreen?.();
+}
+
 function writeStoredPreset(trackerId: string, minutes: number | null): void {
   try {
     if (minutes === null) {
@@ -118,6 +156,34 @@ export function Timer({
   // Guards the countdown from ringing twice on back-to-back ticks.
   const finishingRef = useRef(false);
   const audioRef = useRef<AudioContext | null>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+
+  // The browser can drop out of fullscreen on its own (Esc, tab switch), so
+  // the element is the source of truth rather than our own click handler.
+  useEffect(() => {
+    const sync = () => setFullscreen(fullscreenElement() === frameRef.current);
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
+    return () => {
+      document.removeEventListener("fullscreenchange", sync);
+      document.removeEventListener("webkitfullscreenchange", sync);
+    };
+  }, []);
+
+  async function toggleFullscreen() {
+    const frame = frameRef.current;
+    if (!frame) return;
+    try {
+      if (fullscreenElement()) await exitFullscreen();
+      else await requestFullscreen(frame);
+    } catch {
+      setMessage({
+        kind: "error",
+        text: "Fullscreen isn't available in this browser.",
+      });
+    }
+  }
 
   const targetMs = presetMinutes === null ? null : presetMinutes * 60_000;
   const presetLabel = presetMinutes === null ? null : formatPreset(presetMinutes);
@@ -350,20 +416,65 @@ export function Timer({
     );
   }
 
+  // Fullscreen keeps the same console, just scaled to the screen: the pads
+  // stretch to fill the height instead of sitting at a fixed cell height.
+  const cellHeight = fullscreen ? "" : "h-20";
+
   return (
-    <div className="flex w-full max-w-3xl flex-col gap-3">
-      <RetroFrame>
-        <div className="grid sm:grid-cols-[minmax(0,1fr)_auto]">
+    <div
+      className={cn(
+        "flex w-full flex-col gap-3",
+        !fullscreen && "max-w-3xl",
+      )}
+    >
+      <RetroFrame
+        ref={frameRef}
+        // Stacked on a narrow screen the console can be taller than the
+        // viewport, so let it scroll rather than clipping the controls.
+        className={fullscreen ? "overflow-auto border-0" : undefined}
+      >
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          title={fullscreen ? "Exit full screen (Esc)" : "Full screen"}
+          className="absolute top-3 right-3 z-10 p-1 text-retro-line transition-colors hover:text-retro-amber"
+        >
+          {fullscreen ? (
+            <MinimizeIcon className="size-4" />
+          ) : (
+            <MaximizeIcon className="size-4" />
+          )}
+          <span className="sr-only">
+            {fullscreen ? "Exit full screen" : "Full screen"}
+          </span>
+        </button>
+
+        <div
+          className={cn(
+            "grid sm:grid-cols-[minmax(0,1fr)_auto]",
+            fullscreen && "min-h-full sm:h-full",
+          )}
+        >
           {/* Display + transport controls */}
           <div className="flex flex-col">
             <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-12">
               <p
-                className="font-bpdots text-5xl leading-none text-retro-glow tabular-nums sm:text-7xl"
+                className={cn(
+                  "font-bpdots leading-none text-retro-glow tabular-nums",
+                  fullscreen
+                    ? "text-7xl sm:text-8xl lg:text-[10rem]"
+                    : "text-5xl sm:text-7xl",
+                )}
                 style={{ textShadow: "0 0 24px color-mix(in oklch, var(--retro-glow) 45%, transparent)" }}
               >
                 {formatClock(displayMs)}
               </p>
-              <p className="text-[0.6rem] tracking-[0.35em] text-retro-dim uppercase">
+              <p
+                className={cn(
+                  "tracking-[0.35em] text-retro-dim uppercase",
+                  fullscreen ? "text-sm" : "text-[0.6rem]",
+                )}
+              >
                 {status === "running"
                   ? presetLabel === null
                     ? "Recording"
@@ -376,38 +487,55 @@ export function Timer({
               </p>
             </div>
 
-            <div className="grid h-20 grid-cols-3 border-t-2 border-retro-line">
+            <div
+              className={cn(
+                "grid grid-cols-3 border-t-2 border-retro-line",
+                fullscreen ? "h-28" : "h-20",
+              )}
+            >
               <ConsoleButton
                 onClick={handleStart}
                 disabled={!idle || !taskId || pending}
                 label="Start"
+                large={fullscreen}
               >
-                <CircleIcon className="size-6 fill-current" />
+                <CircleIcon className="fill-current" />
               </ConsoleButton>
               <ConsoleButton
                 onClick={status === "paused" ? handleResume : handlePause}
                 disabled={idle || pending}
+                large={fullscreen}
                 label={status === "paused" ? "Resume" : "Pause"}
                 className="border-x-2 border-retro-line"
               >
                 {status === "paused" ? (
-                  <PlayIcon className="size-6 fill-current" />
+                  <PlayIcon className="fill-current" />
                 ) : (
-                  <PauseIcon className="size-6 fill-current" />
+                  <PauseIcon className="fill-current" />
                 )}
               </ConsoleButton>
               <ConsoleButton
                 onClick={handleStop}
                 disabled={idle || pending}
+                large={fullscreen}
                 label="Stop"
               >
-                <SquareIcon className="size-6 fill-current" />
+                <SquareIcon className="fill-current" />
               </ConsoleButton>
             </div>
           </div>
 
           {/* Task and preset pads */}
-          <div className="grid grid-cols-2 border-t-2 border-retro-line sm:w-64 sm:border-t-0 sm:border-l-2">
+          <div
+            className={cn(
+              "grid grid-cols-2 border-t-2 border-retro-line sm:border-t-0 sm:border-l-2",
+              // Explicit rows so the pads divide the height evenly once the
+              // cells lose their fixed height in fullscreen.
+              fullscreen
+                ? "grid-rows-4 sm:w-80 lg:w-96"
+                : "sm:w-64",
+            )}
+          >
             {Array.from({ length: TASK_SLOTS }, (_, index) => {
               const task = gridTasks[index];
               // Left-hand cells carry the vertical rule.
@@ -418,7 +546,8 @@ export function Timer({
                   <div
                     key={`empty-${index}`}
                     className={cn(
-                      "flex h-20 items-center justify-center border-b-2 border-retro-line/60 text-retro-line",
+                      "flex items-center justify-center border-b-2 border-retro-line/60 text-retro-line",
+                      cellHeight,
                       leftColumn && "border-r-2",
                     )}
                   >
@@ -439,8 +568,9 @@ export function Timer({
                   disabled={!idle || pending}
                   onClick={() => setTaskId(task.id)}
                   className={cn(
-                    "flex h-20 items-center justify-center border-b-2 border-retro-line/60 px-2 text-center transition-colors",
-                    "text-sm leading-tight font-bold tracking-wider uppercase",
+                    "flex items-center justify-center border-b-2 border-retro-line/60 px-2 text-center leading-tight font-bold tracking-wider uppercase transition-colors",
+                    cellHeight,
+                    fullscreen ? "text-2xl" : "text-sm",
                     leftColumn && "border-r-2",
                     selected
                       ? "bg-retro-amber text-retro-bg"
@@ -472,7 +602,9 @@ export function Timer({
                     )
                   }
                   className={cn(
-                    "flex h-20 items-center justify-center border-retro-line/60 text-xl font-bold tracking-widest transition-colors",
+                    "flex items-center justify-center border-retro-line/60 font-bold tracking-widest transition-colors",
+                    cellHeight,
+                    fullscreen ? "text-3xl" : "text-xl",
                     index % 2 === 0 && "border-r-2",
                     // Every row but the last gets a horizontal rule.
                     index < PRESETS.length - 2 && "border-b-2",
@@ -512,9 +644,23 @@ export function Timer({
   );
 }
 
-function RetroFrame({ children }: { children: React.ReactNode }) {
+function RetroFrame({
+  ref,
+  className,
+  children,
+}: {
+  ref?: React.Ref<HTMLDivElement>;
+  className?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="overflow-hidden border-2 border-retro-line bg-retro-bg font-bpdots-unicase text-retro-amber shadow-[0_0_40px_-12px_var(--retro-amber)] select-none">
+    <div
+      ref={ref}
+      className={cn(
+        "relative overflow-hidden border-2 border-retro-line bg-retro-bg font-bpdots-unicase text-retro-amber shadow-[0_0_40px_-12px_var(--retro-amber)] select-none",
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -524,12 +670,14 @@ function ConsoleButton({
   onClick,
   disabled,
   label,
+  large,
   className,
   children,
 }: {
   onClick: () => void;
   disabled: boolean;
   label: string;
+  large?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -543,11 +691,17 @@ function ConsoleButton({
         "flex flex-col items-center justify-center gap-1.5 text-retro-amber transition-colors",
         "enabled:hover:bg-retro-cell enabled:hover:text-retro-glow",
         "disabled:text-retro-line",
+        large ? "[&_svg]:size-8" : "[&_svg]:size-6",
         className,
       )}
     >
       {children}
-      <span className="text-sm font-bold tracking-[0.2em] uppercase">
+      <span
+        className={cn(
+          "font-bold tracking-[0.2em] uppercase",
+          large ? "text-lg" : "text-sm",
+        )}
+      >
         {label}
       </span>
     </button>
