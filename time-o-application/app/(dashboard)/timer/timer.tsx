@@ -644,7 +644,7 @@ export function Timer({
   );
 }
 
-function RetroFrame({
+export function RetroFrame({
   ref,
   className,
   children,
