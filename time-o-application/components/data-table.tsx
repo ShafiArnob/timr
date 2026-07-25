@@ -17,6 +17,18 @@ import {
 } from "@tanstack/react-table"
 import { z } from "zod"
 
+import { deleteTimeTracker } from "@/app/(dashboard)/dashboard/actions"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -52,6 +64,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ChevronsRightIcon,
+  Trash2Icon,
 } from "lucide-react"
 
 export const schema = z.object({
@@ -90,6 +103,77 @@ function formatDateTime(iso: string | null, timeZone: string | null): string {
   } catch {
     return "—"
   }
+}
+
+function DeleteSessionButton({ session }: { session: TimeTrackerRow }) {
+  const [open, setOpen] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [pending, startTransition] = React.useTransition()
+
+  const isActive = session.status !== "COMPLETED"
+
+  function handleDelete() {
+    setError(null)
+    startTransition(async () => {
+      const result = await deleteTimeTracker(session.id)
+      if (result.status === "error") {
+        setError(result.message)
+        return
+      }
+      // The revalidated page drops the row, which unmounts this anyway.
+      setOpen(false)
+    })
+  }
+
+  return (
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        // Don't let a click-away cancel a delete that is already in flight.
+        if (pending) return
+        setError(null)
+        setOpen(next)
+      }}
+    >
+      <AlertDialogTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground hover:text-destructive"
+          />
+        }
+      >
+        <Trash2Icon />
+        <span className="sr-only">Delete session</span>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this session?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {isActive
+              ? `This ${session.task} session is still running. Deleting it discards the ${session.minutesSpent} minute(s) tracked so far and stops the timer.`
+              : `This removes the ${session.task} session and its ${session.minutesSpent} minute(s). This can't be undone.`}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {error ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={pending}
+            onClick={handleDelete}
+          >
+            {pending ? "Deleting…" : "Delete"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
 }
 
 function StatusBadge({ status }: { status: TimeTrackerRow["status"] }) {
@@ -167,6 +251,17 @@ export function DataTable({
             {row.original.minutesSpent} min
           </div>
         ),
+      },
+      {
+        id: "actions",
+        header: () => <span className="sr-only">Actions</span>,
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <DeleteSessionButton session={row.original} />
+          </div>
+        ),
+        enableSorting: false,
+        enableHiding: false,
       },
     ],
     [timezone]
