@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -8,8 +7,8 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { getTasks, getUser } from "@/lib/dal";
-import { deleteTask } from "./actions";
 import { TaskForm } from "./task-form";
+import { TaskList } from "./task-list";
 import { TimezoneForm } from "./timezone-form";
 
 export default async function Page() {
@@ -42,46 +41,13 @@ export default async function Page() {
             <h3 className="text-sm font-medium">Tasks</h3>
             <p className="text-sm text-muted-foreground">
               Create tasks to track your time against. Pick a label and a
-              color — the value is derived from the label.
+              color — the value is derived from the label. Drag the handle to
+              reorder; the order is saved and used everywhere tasks are listed.
             </p>
           </div>
           <TaskForm />
 
-          {tasks.length > 0 ? (
-            <ul className="divide-y rounded-lg border">
-              {tasks.map((task) => (
-                <li
-                  key={task.id}
-                  className="flex items-center gap-3 px-4 py-3"
-                >
-                  <span
-                    className="size-4 shrink-0 rounded-full border"
-                    style={{ backgroundColor: task.color }}
-                    aria-hidden
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{task.label}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {task.value}
-                    </p>
-                  </div>
-                  <form action={deleteTask}>
-                    <input type="hidden" name="id" value={task.id} />
-                    <Button
-                      type="submit"
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground"
-                    >
-                      Delete
-                    </Button>
-                  </form>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">No tasks yet.</p>
-          )}
+          <TaskList tasks={tasks} />
         </CardContent>
       </Card>
     </div>

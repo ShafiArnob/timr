@@ -27,10 +27,13 @@ model User {
 }
 
 model Task {
-  id        String   @id @default(cuid())
-  value     String
-  label     String
-  color     String
+  id    String @id @default(cuid())
+  value String
+  label String
+  color String
+  /// Manual sort order within a user's list, ascending. Gaps are allowed —
+  /// only the relative order matters, and a reorder rewrites the whole list.
+  position  Int      @default(0)
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
@@ -38,7 +41,7 @@ model Task {
 
   timeTrackers TimeTracker[]
 
-  @@index([userId])
+  @@index([userId, position])
   @@map("tasks")
 }
 

@@ -77,8 +77,15 @@ export async function createTask(
   }
 
   try {
+    // New tasks land at the bottom of the manual order.
+    const last = await prisma.task.findFirst({
+      where: { userId },
+      orderBy: { position: "desc" },
+      select: { position: true },
+    });
+
     await prisma.task.create({
-      data: { label, value, color, userId },
+      data: { label, value, color, userId, position: (last?.position ?? -1) + 1 },
     });
   } catch (error) {
     console.error("Failed to create task:", error);
@@ -87,6 +94,63 @@ export async function createTask(
 
   revalidatePath("/settings");
   return { status: "success", message: "Task added." };
+}
+
+export type ReorderState =
+  | { status: "success" }
+  | { status: "error"; message: string };
+
+/**
+ * Persists a drag-and-drop reorder. `orderedIds` must list every one of the
+ * user's tasks exactly once — the array index becomes the stored position.
+ */
+export async function reorderTasks(
+  orderedIds: string[],
+): Promise<ReorderState> {
+  const { userId } = await verifySession();
+
+  const staleMessage = "That list is out of date. Refresh and try again.";
+
+  if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== "string")) {
+    return { status: "error", message: staleMessage };
+  }
+  if (new Set(orderedIds).size !== orderedIds.length) {
+    return { status: "error", message: staleMessage };
+  }
+
+  try {
+    const owned = await prisma.task.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
+    // Reject anything that isn't an exact permutation of the user's tasks:
+    // a partial list would leave the untouched rows with colliding positions,
+    // and a foreign id would let one user reorder another's tasks.
+    const ownedIds = new Set(owned.map((task) => task.id));
+    if (
+      orderedIds.length !== ownedIds.size ||
+      orderedIds.some((id) => !ownedIds.has(id))
+    ) {
+      return { status: "error", message: staleMessage };
+    }
+
+    await prisma.$transaction(
+      orderedIds.map((id, index) =>
+        // updateMany keeps the userId scope on the write itself.
+        prisma.task.updateMany({
+          where: { id, userId },
+          data: { position: index },
+        }),
+      ),
+    );
+  } catch (error) {
+    console.error("Failed to reorder tasks:", error);
+    return { status: "error", message: "Something went wrong. Please try again." };
+  }
+
+  revalidatePath("/settings");
+  return { status: "success" };
 }
 
 export async function deleteTask(formData: FormData): Promise<void> {

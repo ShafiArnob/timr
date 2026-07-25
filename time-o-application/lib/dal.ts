@@ -97,7 +97,8 @@ export const getTimeTrackers = cache(async () => {
 });
 
 /**
- * Returns the current user's tasks, newest first.
+ * Returns the current user's tasks in their manual order.
+ * `createdAt` only breaks ties between equal positions.
  */
 export const getTasks = cache(async () => {
   const session = await verifySession();
@@ -105,7 +106,7 @@ export const getTasks = cache(async () => {
   try {
     return await prisma.task.findMany({
       where: { userId: session.userId },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
       select: { id: true, value: true, label: true, color: true },
     });
   } catch (error) {
