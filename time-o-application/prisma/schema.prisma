@@ -22,6 +22,7 @@ model User {
 
   tasks        Task[]
   timeTrackers TimeTracker[]
+  apiKeys      ApiKey[]
 
   @@map("users")
 }
@@ -68,4 +69,30 @@ model TimeTracker {
   @@index([userId])
   @@index([taskId])
   @@map("time_trackers")
+}
+
+model ApiKey {
+  id String @id @default(cuid())
+  /// Human label, so a key can be recognised in the UI without revealing it.
+  name String
+  /// SHA-256 of the issued token. The token itself is shown once, at creation,
+  /// and never stored — a leaked database can't be replayed against the API.
+  hashedKey String @unique
+  /// Leading characters of the token, kept in the clear so the list can show
+  /// something like "to_live_a1b2…" beside the label.
+  prefix String
+  /// Null means the key never expires.
+  expiresAt DateTime?
+  /// Set instead of deleting the row, so an audit trail survives revocation.
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@map("api_keys")
 }
