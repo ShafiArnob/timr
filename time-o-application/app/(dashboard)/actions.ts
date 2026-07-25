@@ -3,15 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { verifySession } from "@/lib/dal";
+// Shared with the public API, so a session the UI would reject can't be
+// slipped in through a route handler.
+import { FUTURE_SKEW_MS, MAX_SESSION_HOURS } from "@/lib/time-entries";
 
 export type LogSessionResult =
   | { status: "success"; message: string }
   | { status: "error"; message: string };
-
-/** A typo in the year turns into a decade-long session, so cap the span. */
-const MAX_SESSION_HOURS = 24;
-/** Tolerance for a clock that runs slightly ahead of the server's. */
-const FUTURE_SKEW_MS = 60_000;
 
 /**
  * Records work that happened away from the timer. The client sends absolute

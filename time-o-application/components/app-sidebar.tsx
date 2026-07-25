@@ -16,6 +16,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import {
+  BookOpenIcon,
   LayoutDashboardIcon,
   Settings2Icon,
   DatabaseIcon,
@@ -64,6 +65,11 @@ const defaultData: SidebarData = {
       title: "API",
       url: "/api",
       icon: <DatabaseIcon />,
+    },
+    {
+      title: "API docs",
+      url: "/api/docs",
+      icon: <BookOpenIcon />,
     },
     {
       title: "Settings",

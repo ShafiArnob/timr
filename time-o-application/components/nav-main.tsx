@@ -30,6 +30,13 @@ export function NavMain({
 }) {
   const pathname = usePathname()
 
+  // Nested entries like /api/docs also match their parent's prefix, so only the
+  // longest match counts — otherwise two rows highlight at once.
+  const activeUrl = items.reduce((longest, item) => {
+    const matches = pathname === item.url || pathname.startsWith(`${item.url}/`)
+    return matches && item.url.length > longest.length ? item.url : longest
+  }, "")
+
   return (
     <SidebarGroup>
       <SidebarGroupContent className="flex flex-col gap-2">
@@ -52,10 +59,7 @@ export function NavMain({
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton
                 tooltip={item.title}
-                isActive={
-                  pathname === item.url ||
-                  pathname.startsWith(`${item.url}/`)
-                }
+                isActive={item.url === activeUrl}
                 render={<Link href={item.url} />}
               >
                 {item.icon}
