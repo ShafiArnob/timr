@@ -12,10 +12,13 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
+import { ChevronDownIcon, ListFilterIcon } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { type DateRange } from "react-day-picker";
 
 import { DateRangePicker, isSameRange } from "@/components/date-range-picker";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -32,6 +35,14 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 export type TaskTimePoint = {
@@ -41,6 +52,12 @@ export type TaskTimePoint = {
   minutesSpent: number;
   /** ISO string of when the session started. */
   date: string;
+};
+
+export type ChartTaskOption = {
+  id: string;
+  label: string;
+  color: string;
 };
 
 /** Monday, to match the date picker's week presets. */
@@ -71,10 +88,34 @@ function formatHours(minutes: number): string {
   return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
 }
 
-export function ChartTaskTime({ data }: { data: TaskTimePoint[] }) {
+export function ChartTaskTime({
+  data,
+  tasks,
+}: {
+  data: TaskTimePoint[];
+  tasks: ChartTaskOption[];
+}) {
   const [range, setRange] = React.useState<DateRange | undefined>(() =>
     thisWeek(new Date()),
   );
+  // Empty means "no task hidden" — every task shows until the user hides one.
+  const [hiddenTaskIds, setHiddenTaskIds] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+
+  // Shared by the dropdown checkboxes and the clickable legend below the
+  // chart — both are just different entry points to the same hidden set.
+  // The "Other" bucket has no single task id behind it, so clicks on it
+  // are ignored rather than toggling nothing.
+  function toggleHiddenTask(taskId: string) {
+    if (taskId === OTHER_KEY) return;
+    setHiddenTaskIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  }
 
   // The toggle is a shortcut into the range, not separate state — so picking
   // an equivalent range by hand lights the matching button, and picking
@@ -101,7 +142,7 @@ export function ChartTaskTime({ data }: { data: TaskTimePoint[] }) {
     const from = reversed ? selectedTo : selectedFrom;
     const to = reversed ? selectedFrom : selectedTo;
 
-    const inRange = data.filter((point) => {
+    const dateFiltered = data.filter((point) => {
       if (point.minutesSpent <= 0) return false;
       if (!from || !to) return true;
       const at = new Date(point.date);
@@ -111,12 +152,15 @@ export function ChartTaskTime({ data }: { data: TaskTimePoint[] }) {
       );
     });
 
-    // Rank tasks by total time so the biggest ones keep their own bars.
+    // Rank tasks by total time within the date range, independent of which
+    // ones are currently hidden — so hiding a task dims its legend entry and
+    // zeroes its bars without reshuffling everyone else's slot, and it stays
+    // there to be clicked back on.
     const totals = new Map<
       string,
       { label: string; color: string; minutes: number }
     >();
-    for (const point of inRange) {
+    for (const point of dateFiltered) {
       const entry = totals.get(point.taskId) ?? {
         label: point.task,
         color: point.color,
@@ -133,14 +177,17 @@ export function ChartTaskTime({ data }: { data: TaskTimePoint[] }) {
     const keptIds = new Set(kept.map(([taskId]) => taskId));
     const hasOther = ranked.length > kept.length;
 
-    // One bucket per calendar day, holding a minute total per series.
+    // One bucket per calendar day, holding a minute total per series. A
+    // hidden task's day still gets a bucket (so the axis doesn't shift) but
+    // contributes no value to it.
     const buckets = new Map<number, Map<string, number>>();
-    for (const point of inRange) {
+    for (const point of dateFiltered) {
       const day = startOfDay(new Date(point.date)).getTime();
       const bucket = buckets.get(day) ?? new Map<string, number>();
+      buckets.set(day, bucket);
+      if (hiddenTaskIds.has(point.taskId)) continue;
       const seriesKey = keptIds.has(point.taskId) ? point.taskId : OTHER_KEY;
       bucket.set(seriesKey, (bucket.get(seriesKey) ?? 0) + point.minutesSpent);
-      buckets.set(day, bucket);
     }
 
     // Every day in the window gets a slot so the axis stays continuous and
@@ -184,9 +231,13 @@ export function ChartTaskTime({ data }: { data: TaskTimePoint[] }) {
         ...kept.map(([taskId]) => taskId),
         ...(hasOther ? [OTHER_KEY] : []),
       ],
-      totalMinutes: inRange.reduce((sum, point) => sum + point.minutesSpent, 0),
+      totalMinutes: dateFiltered.reduce(
+        (sum, point) =>
+          hiddenTaskIds.has(point.taskId) ? sum : sum + point.minutesSpent,
+        0,
+      ),
     };
-  }, [data, range]);
+  }, [data, range, hiddenTaskIds]);
 
   return (
     <Card className="@container/chart">
@@ -215,6 +266,43 @@ export function ChartTaskTime({ data }: { data: TaskTimePoint[] }) {
             <ToggleGroupItem value="month">This Month</ToggleGroupItem>
           </ToggleGroup>
           <DateRangePicker value={range} onChange={setRange} />
+          {tasks.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+                <ListFilterIcon data-icon="inline-start" />
+                Tasks
+                {hiddenTaskIds.size > 0 ? (
+                  <Badge variant="secondary" className="ml-1">
+                    {tasks.length - hiddenTaskIds.size}
+                  </Badge>
+                ) : null}
+                <ChevronDownIcon data-icon="inline-end" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  disabled={hiddenTaskIds.size === 0}
+                  onClick={() => setHiddenTaskIds(new Set())}
+                >
+                  Show all
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {tasks.map((task) => (
+                  <DropdownMenuCheckboxItem
+                    key={task.id}
+                    checked={!hiddenTaskIds.has(task.id)}
+                    onCheckedChange={() => toggleHiddenTask(task.id)}
+                  >
+                    <span
+                      className="size-2.5 shrink-0 rounded-full border"
+                      style={{ backgroundColor: task.color }}
+                      aria-hidden
+                    />
+                    {task.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </CardAction>
       </CardHeader>
       <CardContent>
@@ -264,7 +352,14 @@ export function ChartTaskTime({ data }: { data: TaskTimePoint[] }) {
                   />
                 }
               />
-              <ChartLegend content={<ChartLegendContent />} />
+              <ChartLegend
+                content={
+                  <ChartLegendContent
+                    onItemClick={toggleHiddenTask}
+                    inactiveKeys={hiddenTaskIds}
+                  />
+                }
+              />
               {seriesKeys.map((key) => (
                 <Bar
                   key={key}

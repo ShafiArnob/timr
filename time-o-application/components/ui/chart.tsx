@@ -278,9 +278,15 @@ function ChartLegendContent({
   payload,
   verticalAlign = "bottom",
   nameKey,
+  onItemClick,
+  inactiveKeys,
 }: React.ComponentProps<"div"> & {
   hideIcon?: boolean
   nameKey?: string
+  /** When provided, each entry renders as a toggle button instead of static text. */
+  onItemClick?: (key: string) => void
+  /** Keys to render dimmed, e.g. series currently filtered out of the chart. */
+  inactiveKeys?: Set<string>
 } & RechartsPrimitive.DefaultLegendContentProps) {
   const { config } = useChart()
 
@@ -301,14 +307,10 @@ function ChartLegendContent({
         .map((item, index) => {
           const key = `${nameKey ?? item.dataKey ?? "value"}`
           const itemConfig = getPayloadConfigFromPayload(config, item, key)
+          const isInactive = inactiveKeys?.has(key) ?? false
 
-          return (
-            <div
-              key={index}
-              className={cn(
-                "flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground"
-              )}
-            >
+          const content = (
+            <>
               {itemConfig?.icon && !hideIcon ? (
                 <itemConfig.icon />
               ) : (
@@ -320,6 +322,34 @@ function ChartLegendContent({
                 />
               )}
               {itemConfig?.label}
+            </>
+          )
+
+          if (onItemClick) {
+            return (
+              <button
+                key={index}
+                type="button"
+                aria-pressed={!isInactive}
+                onClick={() => onItemClick(key)}
+                className={cn(
+                  "flex cursor-pointer items-center gap-1.5 rounded-sm outline-none [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring",
+                  isInactive && "opacity-40"
+                )}
+              >
+                {content}
+              </button>
+            )
+          }
+
+          return (
+            <div
+              key={index}
+              className={cn(
+                "flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground"
+              )}
+            >
+              {content}
             </div>
           )
         })}

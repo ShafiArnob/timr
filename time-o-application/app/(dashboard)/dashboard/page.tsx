@@ -34,20 +34,18 @@ export default async function Page() {
       date: tracker.startTime!.toISOString(),
     }));
 
+  const taskOptions = tasks.map((task) => ({
+    id: task.id,
+    label: task.label,
+    color: task.color,
+  }));
+
   return (
     <>
       <div className="px-4 lg:px-6">
-        <ChartTaskTime data={chartPoints} />
+        <ChartTaskTime data={chartPoints} tasks={taskOptions} />
       </div>
-      <DataTable
-        data={rows}
-        tasks={tasks.map((task) => ({
-          id: task.id,
-          label: task.label,
-          color: task.color,
-        }))}
-        timezone={user?.timezone ?? null}
-      />
+      <DataTable data={rows} tasks={taskOptions} timezone={user?.timezone ?? null} />
     </>
   );
 }
