@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { headers } from "next/headers";
 
 import {
   Accordion,
@@ -38,14 +37,27 @@ export const metadata: Metadata = {
   description: "Log time from a device or script with an API key.",
 };
 
-/** The docs quote real URLs, so they're built from the host serving the page. */
-async function resolveOrigin(): Promise<string> {
-  const headerList = await headers();
-  const host =
-    headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "localhost:3000";
-  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
-  const proto = headerList.get("x-forwarded-proto") ?? (isLocal ? "http" : "https");
-  return `${proto}://${host}`;
+/** Where the API actually answers, when nothing else says otherwise. */
+const PRODUCTION_ORIGIN = "https://timr0.vercel.app";
+
+/**
+ * These snippets get pasted into firmware, so they must quote an origin the
+ * device can reach — deliberately *not* the host serving the page. Reading the
+ * docs from `next dev` would otherwise hand an ESP32 a localhost URL that
+ * resolves to the board itself.
+ *
+ * An explicit NEXT_PUBLIC_APP_URL wins, so a custom domain needs no code
+ * change. Otherwise Vercel's production domain, which stays stable on preview
+ * deployments rather than drifting to a per-deploy URL.
+ */
+function resolveOrigin(): string {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+
+  const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  if (vercelHost) return `https://${vercelHost}`;
+
+  return PRODUCTION_ORIGIN;
 }
 
 type Param = {
@@ -243,7 +255,7 @@ const ERROR_RESPONSE = `{
 }`;
 
 export default async function Page() {
-  const origin = await resolveOrigin();
+  const origin = resolveOrigin();
 
   return (
     <div className="flex flex-col gap-4 px-4 md:gap-6 lg:px-6">
