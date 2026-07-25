@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, JetBrains_Mono, Doto } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 
 const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'});
@@ -49,6 +50,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      // next-themes stamps the theme class onto <html> before paint, so the
+      // server markup can't match — this is the documented opt-out.
+      suppressHydrationWarning
       className={cn(
         "h-full",
         "antialiased",
@@ -61,7 +65,16 @@ export default function RootLayout({
         bpdotsUnicase.variable
       )}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

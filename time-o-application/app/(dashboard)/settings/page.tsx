@@ -5,6 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ModeToggle } from "@/components/mode-toggle";
 import { Separator } from "@/components/ui/separator";
 import { getTasks, getUser } from "@/lib/dal";
 import { TaskForm } from "./task-form";
@@ -24,6 +25,16 @@ export default async function Page() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          <div className="space-y-1">
+            <h3 className="text-sm font-medium">Appearance</h3>
+            <p className="text-sm text-muted-foreground">
+              Choose a light or dark theme, or follow your system setting.
+            </p>
+          </div>
+          <ModeToggle />
+
+          <Separator />
+
           <div className="space-y-1">
             <h3 className="text-sm font-medium">Time zone</h3>
             <p className="text-sm text-muted-foreground">
