@@ -96,6 +96,53 @@ export async function createTask(
   return { status: "success", message: "Task added." };
 }
 
+export async function updateTask(formData: FormData): Promise<SettingsState> {
+  const { userId } = await verifySession();
+
+  const id = String(formData.get("id") ?? "");
+  const label = String(formData.get("label") ?? "").trim();
+  const color = String(formData.get("color") ?? "");
+
+  if (!id) {
+    return { status: "error", message: "That task could not be found." };
+  }
+  if (!label) {
+    return { status: "error", message: "Please enter a task label." };
+  }
+  // The value is always derived from the label: lowercased, spaces → dashes.
+  const value = slugify(label);
+  if (!value) {
+    return {
+      status: "error",
+      message: "The label must contain at least one letter or number.",
+    };
+  }
+  if (!isTaskColor(color)) {
+    return { status: "error", message: "Please choose one of the colors." };
+  }
+
+  try {
+    // updateMany keeps the ownership check on the write itself.
+    const result = await prisma.task.updateMany({
+      where: { id, userId },
+      data: { label, value, color },
+    });
+    if (result.count === 0) {
+      return { status: "error", message: "That task could not be found." };
+    }
+  } catch (error) {
+    console.error("Failed to update task:", error);
+    return { status: "error", message: "Something went wrong. Please try again." };
+  }
+
+  // The label/color are read live from the task relation wherever a session
+  // is shown, so those pages need to drop their cached copies too.
+  revalidatePath("/settings");
+  revalidatePath("/timer");
+  revalidatePath("/dashboard");
+  return { status: "success", message: "Task updated." };
+}
+
 export type ReorderState =
   | { status: "success" }
   | { status: "error"; message: string };

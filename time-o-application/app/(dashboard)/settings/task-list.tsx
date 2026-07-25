@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
+import { useId, useState, useTransition, type FormEvent } from "react";
 import {
   closestCenter,
   DndContext,
@@ -26,7 +26,21 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVerticalIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { deleteTask, reorderTasks } from "./actions";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { TASK_COLORS } from "@/lib/task-colors";
+import { cn } from "@/lib/utils";
+import { deleteTask, reorderTasks, updateTask } from "./actions";
 
 export type SettingsTask = {
   id: string;
@@ -34,6 +48,136 @@ export type SettingsTask = {
   label: string;
   color: string;
 };
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function EditTaskDialog({ task }: { task: SettingsTask }) {
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState(task.label);
+  const [color, setColor] = useState(task.color);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  // Re-seed the fields from the current task each time the dialog opens, so
+  // a cancelled edit doesn't leak into the next one.
+  function handleOpenChange(next: boolean) {
+    if (pending) return;
+    setError(null);
+    if (next) {
+      setLabel(task.label);
+      setColor(task.color);
+    }
+    setOpen(next);
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    setError(null);
+    startTransition(async () => {
+      const result = await updateTask(formData);
+      if (result?.status === "error") {
+        setError(result.message);
+        return;
+      }
+      setOpen(false);
+    });
+  }
+
+  const value = slugify(label);
+  const canSave = value.length > 0 && !pending;
+  const formId = `edit-task-${task.id}`;
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+          />
+        }
+      >
+        Edit
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit task</DialogTitle>
+          <DialogDescription>
+            Update the label or color. The value is re-derived from the
+            label.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form id={formId} onSubmit={handleSubmit} className="grid gap-4">
+          <input type="hidden" name="id" value={task.id} />
+          <input type="hidden" name="color" value={color} />
+
+          <div className="grid gap-2">
+            <Label htmlFor={`${formId}-label`}>Label</Label>
+            <Input
+              id={`${formId}-label`}
+              name="label"
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+            />
+            {value ? (
+              <p className="text-xs text-muted-foreground">
+                Saved as <span className="font-mono">{value}</span>
+              </p>
+            ) : null}
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Color</Label>
+            <div className="grid w-fit grid-cols-8 gap-2">
+              {TASK_COLORS.map((entry) => (
+                <button
+                  key={entry.hex}
+                  type="button"
+                  title={entry.name}
+                  aria-label={entry.name}
+                  aria-pressed={color === entry.hex}
+                  onClick={() => setColor(entry.hex)}
+                  className={cn(
+                    "size-7 rounded-full border transition-transform hover:scale-110",
+                    color === entry.hex &&
+                      "ring-2 ring-ring ring-offset-2 ring-offset-background",
+                  )}
+                  style={{ backgroundColor: entry.hex }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+        </form>
+
+        <DialogFooter>
+          <DialogClose
+            render={<Button type="button" variant="outline" disabled={pending} />}
+          >
+            Cancel
+          </DialogClose>
+          <Button type="submit" form={formId} disabled={!canSave}>
+            {pending ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function SortableTask({ task }: { task: SettingsTask }) {
   const {
@@ -78,6 +222,8 @@ function SortableTask({ task }: { task: SettingsTask }) {
         <p className="truncate text-sm font-medium">{task.label}</p>
         <p className="truncate text-xs text-muted-foreground">{task.value}</p>
       </div>
+
+      <EditTaskDialog task={task} />
 
       <form action={deleteTask}>
         <input type="hidden" name="id" value={task.id} />
