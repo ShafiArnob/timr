@@ -1,3 +1,4 @@
+import { ChartTaskTime, type TaskTimePoint } from "@/components/chart-task-time";
 import { DataTable, type TimeTrackerRow } from "@/components/data-table";
 import { getTimeTrackers, getUser } from "@/lib/dal";
 
@@ -16,10 +17,23 @@ export default async function Page() {
     minutesSpent: tracker.minutesSpent,
   }));
 
+  // A session with no start time can't be placed on a week or month, so it
+  // only shows in the table below.
+  const chartPoints: TaskTimePoint[] = trackers
+    .filter((tracker) => tracker.startTime !== null)
+    .map((tracker) => ({
+      taskId: tracker.task.id,
+      task: tracker.task.label,
+      color: tracker.task.color,
+      minutesSpent: tracker.minutesSpent,
+      date: tracker.startTime!.toISOString(),
+    }));
+
   return (
     <>
-      {/* <SectionCards /> */}
-      <div className="px-4 lg:px-6">{/* <ChartAreaInteractive /> */}</div>
+      <div className="px-4 lg:px-6">
+        <ChartTaskTime data={chartPoints} />
+      </div>
       <DataTable data={rows} timezone={user?.timezone ?? null} />
     </>
   );

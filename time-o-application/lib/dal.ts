@@ -87,7 +87,7 @@ export const getTimeTrackers = cache(async () => {
         startTime: true,
         endTime: true,
         minutesSpent: true,
-        task: { select: { label: true, color: true } },
+        task: { select: { id: true, label: true, color: true } },
       },
     });
   } catch (error) {
